@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ma Carte</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink: #1a1208;
+      --parchment: #f5ead6;
+      --parchment-dark: #e8d5b0;
+      --accent: #8b4513;
+      --accent-light: #c47a3a;
+      --border: #7a5c2e;
+      --panel-bg: rgba(245, 234, 214, 0.95);
+    }
+
+    body {
+      font-family: 'Crimson Text', Georgia, serif;
+      background: var(--ink);
+      color: var(--ink);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--ink);
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid var(--accent);
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+
+    header h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.3rem;
+      color: var(--parchment);
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--accent-light);
+      font-style: italic;
+    }
+
+    #map-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #2c1f0e;
+    }
+
+    /* Panel calques */
+    #layers-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 900;
+      background: var(--panel-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 4px;
+      min-width: 200px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+
+    #layers-panel h2 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      background: var(--ink);
+      color: var(--parchment);
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+
+    #layers-panel h2 span { font-size: 0.7rem; }
+
+    #layers-list {
+      padding: 8px 0;
+    }
+
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      font-size: 0.9rem;
+    }
+
+    .layer-item:hover { background: var(--parchment-dark); }
+
+    .layer-item input[type=checkbox] {
+      accent-color: var(--accent);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .layer-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .layer-label { flex: 1; color: var(--ink); }
+
+    .layer-opacity {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 12px 6px 34px;
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+
+    .layer-opacity input[type=range] {
+      width: 80px;
+      accent-color: var(--accent);
+      height: 3px;
+      cursor: pointer;
+    }
+
+    /* Info box */
+    #info-box {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      z-index: 900;
+      background: var(--panel-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 14px;
+      max-width: 280px;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+      font-size: 0.9rem;
+    }
+
+    #info-box h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      color: var(--accent);
+      margin-bottom: 4px;
+      letter-spacing: 0.06em;
+    }
+
+    #info-box p { color: var(--ink); line-height: 1.5; }
+
+    /* Leaflet overrides */
+    .leaflet-container { cursor: crosshair; }
+    .leaflet-control-zoom {
+      border: 1.5px solid var(--border) !important;
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.3) !important;
+    }
+    .leaflet-control-zoom a {
+      background: var(--parchment) !important;
+      color: var(--ink) !important;
+      font-family: 'Cinzel', serif !important;
+      font-size: 16px !important;
+      line-height: 26px !important;
+    }
+    .leaflet-control-zoom a:hover { background: var(--parchment-dark) !important; }
+
+    .leaflet-popup-content-wrapper {
+      background: var(--parchment);
+      border: 1.5px solid var(--border);
+      border-radius: 4px;
+      box-shadow: 3px 3px 0 rgba(0,0,0,0.3);
+      font-family: 'Crimson Text', serif;
+    }
+    .leaflet-popup-tip { background: var(--parchment); }
+    .leaflet-popup-content { font-size: 0.95rem; color: var(--ink); }
+    .leaflet-popup-content strong {
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    /* Coordonnées */
+    #coords {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      z-index: 900;
+      background: rgba(26,18,8,0.75);
+      color: var(--parchment-dark);
+      font-family: monospace;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 3px;
+    }
+
+    /* Bouton ajouter marqueur */
+    #add-marker-btn {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 900;
+      background: var(--panel-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 4px;
+      padding: 7px 14px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: var(--ink);
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+      letter-spacing: 0.05em;
+      transition: background 0.15s;
+    }
+    #add-marker-btn:hover { background: var(--parchment-dark); }
+    #add-marker-btn.active { background: var(--accent); color: var(--parchment); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🗺 Ma Carte</h1>
+  </div>
+  <p>Carte personnalisée · Leaflet.js</p>
+</header>
+
+<div id="map-container">
+  <div id="map"></div>
+
+  <!-- Panneau calques -->
+  <div id="layers-panel">
+    <h2 onclick="togglePanel()">
+      ☰ Calques
+      <span id="panel-arrow">▲</span>
+    </h2>
+    <div id="layers-list">
+      <!-- Généré par JS -->
+    </div>
+  </div>
+
+  <!-- Bouton marqueur -->
+  <button id="add-marker-btn" onclick="toggleAddMarker()">+ Ajouter un lieu</button>
+
+  <!-- Info -->
+  <div id="info-box">
+    <h3>Comment utiliser</h3>
+    <p>Clique sur la carte pour voir les coordonnées. Active les calques à droite. Remplace les images dans le dossier <code>images/</code>.</p>
+  </div>
+
+  <!-- Coordonnées -->
+  <div id="coords">x: — y: —</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+
+// ═══════════════════════════════════════════════════════
+//  CONFIGURATION — modifie ces valeurs selon ta carte
+// ═══════════════════════════════════════════════════════
+
+// Dimensions de ton image en pixels (largeur x hauteur)
+const IMAGE_WIDTH  = 2000;
+const IMAGE_HEIGHT = 1500;
+
+// Zoom min/max
+const ZOOM_MIN = -2;
+const ZOOM_MAX = 3;
+const ZOOM_INIT = 0;
+
+// ═══════════════════════════════════════════════════════
+//  INITIALISATION DE LA CARTE
+// ═══════════════════════════════════════════════════════
+
+// Système de coordonnées basé sur les pixels
+const CRS = L.CRS.Simple;
+
+// Limites de la carte (coins haut-gauche et bas-droite)
+const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
+const center = [IMAGE_HEIGHT / 2, IMAGE_WIDTH / 2];
+
+const map = L.map('map', {
+  crs: CRS,
+  minZoom: ZOOM_MIN,
+  maxZoom: ZOOM_MAX,
+  zoomSnap: 0.5,
+  attributionControl: false,
+});
+
+map.setView(center, ZOOM_INIT);
+
+// ═══════════════════════════════════════════════════════
+//  CALQUES — ajoute / modifie tes calques ici
+// ═══════════════════════════════════════════════════════
+
+const layersDef = [
+  {
+    id: 'fond',
+    label: 'Fond de carte',
+    color: '#8b4513',
+    visible: true,
+    opacity: 1,
+    create: () => L.imageOverlay('images/fond.png', bounds)
+  },
+  {
+    id: 'routes',
+    label: 'Routes & chemins',
+    color: '#c47a3a',
+    visible: true,
+    opacity: 0.9,
+    create: () => L.imageOverlay('images/routes.png', bounds)
+  },
+  {
+    id: 'zones',
+    label: 'Zones & régions',
+    color: '#2d6a4f',
+    visible: false,
+    opacity: 0.7,
+    create: () => L.imageOverlay('images/zones.png', bounds)
+  },
+  {
+    id: 'labels',
+    label: 'Noms de lieux',
+    color: '#1a1208',
+    visible: true,
+    opacity: 1,
+    create: () => L.imageOverlay('images/labels.png', bounds)
+  },
+];
+
+// Stockage des instances de calques
+const layers = {};
+
+// ═══════════════════════════════════════════════════════
+//  MARQUEURS — ajoute tes lieux ici
+// ═══════════════════════════════════════════════════════
+
+const lieux = [
+  {
+    y: 750, x: 1000,
+    nom: 'Centre',
+    desc: 'Le centre de la carte.'
+  },
+  // Ajoute d'autres lieux ici :
+  // { y: 300, x: 400, nom: 'Nom du lieu', desc: 'Description.' },
+];
+
+// Calque des marqueurs (toujours visible)
+const marqueursLayer = L.layerGroup().addTo(map);
+
+// ═══════════════════════════════════════════════════════
+//  ICÔNE PERSONNALISÉE
+// ═══════════════════════════════════════════════════════
+
+const icone = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:12px; height:12px;
+    background:#8b4513;
+    border:2px solid #f5ead6;
+    border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);
+    box-shadow:1px 1px 3px rgba(0,0,0,0.5);
+  "></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 12],
+  popupAnchor: [0, -14],
+});
+
+// ═══════════════════════════════════════════════════════
+//  CONSTRUCTION DES CALQUES ET DU PANNEAU
+// ═══════════════════════════════════════════════════════
+
+const listEl = document.getElementById('layers-list');
+
+layersDef.forEach(def => {
+  // Créer le calque Leaflet
+  const layer = def.create();
+  layer.setOpacity(def.opacity);
+  layers[def.id] = layer;
+  if (def.visible) layer.addTo(map);
+
+  // Construire l'UI du panneau
+  const item = document.createElement('div');
+  item.innerHTML = `
+    <div class="layer-item" onclick="toggleLayer('${def.id}')">
+      <input type="checkbox" id="cb-${def.id}" ${def.visible ? 'checked' : ''}
+             onclick="event.stopPropagation(); toggleLayer('${def.id}')">
+      <span class="layer-dot" style="background:${def.color}"></span>
+      <span class="layer-label">${def.label}</span>
+    </div>
+    <div class="layer-opacity">
+      Opacité&nbsp;
+      <input type="range" min="0" max="1" step="0.05"
+             value="${def.opacity}" id="op-${def.id}"
+             oninput="setOpacity('${def.id}', this.value)">
+    </div>
+  `;
+  listEl.appendChild(item);
+});
+
+// Ajouter les marqueurs prédéfinis
+lieux.forEach(l => ajouterMarqueur(l.y, l.x, l.nom, l.desc));
+
+// ═══════════════════════════════════════════════════════
+//  FONCTIONS
+// ═══════════════════════════════════════════════════════
+
+function toggleLayer(id) {
+  const layer = layers[id];
+  const cb = document.getElementById('cb-' + id);
+  if (map.hasLayer(layer)) {
+    map.removeLayer(layer);
+    cb.checked = false;
+  } else {
+    layer.addTo(map);
+    cb.checked = true;
+  }
+}
+
+function setOpacity(id, val) {
+  layers[id].setOpacity(parseFloat(val));
+}
+
+let panelOpen = true;
+function togglePanel() {
+  panelOpen = !panelOpen;
+  document.getElementById('layers-list').style.display = panelOpen ? '' : 'none';
+  document.getElementById('panel-arrow').textContent = panelOpen ? '▲' : '▼';
+}
+
+// Affichage des coordonnées
+map.on('mousemove', e => {
+  const x = Math.round(e.latlng.lng);
+  const y = Math.round(e.latlng.lat);
+  document.getElementById('coords').textContent = `x: ${x}  y: ${y}`;
+});
+
+// ─── Ajout de marqueurs au clic ───
+let addingMarker = false;
+
+function toggleAddMarker() {
+  addingMarker = !addingMarker;
+  const btn = document.getElementById('add-marker-btn');
+  btn.classList.toggle('active', addingMarker);
+  btn.textContent = addingMarker ? '✕ Annuler' : '+ Ajouter un lieu';
+  map.getContainer().style.cursor = addingMarker ? 'crosshair' : '';
+}
+
+map.on('click', e => {
+  if (!addingMarker) return;
+  const nom = prompt('Nom du lieu :');
+  if (!nom) return;
+  const desc = prompt('Description (optionnel) :') || '';
+  ajouterMarqueur(e.latlng.lat, e.latlng.lng, nom, desc);
+  toggleAddMarker();
+});
+
+function ajouterMarqueur(y, x, nom, desc) {
+  L.marker([y, x], { icon: icone })
+    .bindPopup(`<strong>${nom}</strong>${desc ? desc : ''}`)
+    .addTo(marqueursLayer);
+}
+
+</script>
+</body>
+</html>

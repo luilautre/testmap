@@ -1,0 +1,5 @@
+[
+  {"nom": "Fond",    "file": "background.svg"},
+  {"nom": "Routes",  "file": "routes.png", "opacity": 0.9},
+  {"nom": "Secrets", "file": "secrets.png", "visible": false}
+]

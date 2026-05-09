@@ -313,60 +313,14 @@ const map = L.map('map', {
 map.setView(center, ZOOM_INIT);
 
 // ═══════════════════════════════════════════════════════
-//  CALQUES — ajoute / modifie tes calques ici
+//  CALQUES — chargés depuis index.json
 // ═══════════════════════════════════════════════════════
 
-const layersDef = [
-  {
-    id: 'fond',
-    label: 'Fond de carte',
-    color: '#8b4513',
-    visible: true,
-    opacity: 1,
-    create: () => L.imageOverlay('images/fond.png', bounds)
-  },
-  {
-    id: 'routes',
-    label: 'Routes & chemins',
-    color: '#c47a3a',
-    visible: true,
-    opacity: 0.9,
-    create: () => L.imageOverlay('images/routes.png', bounds)
-  },
-  {
-    id: 'zones',
-    label: 'Zones & régions',
-    color: '#2d6a4f',
-    visible: false,
-    opacity: 0.7,
-    create: () => L.imageOverlay('images/zones.png', bounds)
-  },
-  {
-    id: 'labels',
-    label: 'Noms de lieux',
-    color: '#1a1208',
-    visible: true,
-    opacity: 1,
-    create: () => L.imageOverlay('images/labels.png', bounds)
-  },
-];
+// Palette de couleurs auto si non définie dans le JSON
+const PALETTE = ['#8b4513','#2d6a4f','#1a4a8b','#6b2d8b','#8b7a2d','#2d6b8b'];
 
 // Stockage des instances de calques
 const layers = {};
-
-// ═══════════════════════════════════════════════════════
-//  MARQUEURS — ajoute tes lieux ici
-// ═══════════════════════════════════════════════════════
-
-const lieux = [
-  {
-    y: 750, x: 1000,
-    nom: 'Centre',
-    desc: 'Le centre de la carte.'
-  },
-  // Ajoute d'autres lieux ici :
-  // { y: 300, x: 400, nom: 'Nom du lieu', desc: 'Description.' },
-];
 
 // Calque des marqueurs (toujours visible)
 const marqueursLayer = L.layerGroup().addTo(map);
@@ -391,39 +345,58 @@ const icone = L.divIcon({
 });
 
 // ═══════════════════════════════════════════════════════
-//  CONSTRUCTION DES CALQUES ET DU PANNEAU
+//  CHARGEMENT DYNAMIQUE DE index.json
 // ═══════════════════════════════════════════════════════
 
 const listEl = document.getElementById('layers-list');
 
-layersDef.forEach(def => {
-  // Créer le calque Leaflet
-  const layer = def.create();
-  layer.setOpacity(def.opacity);
-  layers[def.id] = layer;
-  if (def.visible) layer.addTo(map);
+fetch('index.json')
+  .then(r => {
+    if (!r.ok) throw new Error('index.json introuvable');
+    return r.json();
+  })
+  .then(data => {
+    data.forEach((def, i) => {
+      // Valeurs par défaut pour les champs optionnels
+      const id      = 'layer_' + i;
+      const label   = def.nom   ?? def.label ?? def.name ?? ('Calque ' + (i + 1));
+      const file    = def.file  ?? def.fichier ?? def.src ?? '';
+      const visible = def.visible !== false;   // true par défaut
+      const opacity = def.opacity ?? def.opacite ?? 1;
+      const color   = def.color  ?? def.couleur ?? PALETTE[i % PALETTE.length];
 
-  // Construire l'UI du panneau
-  const item = document.createElement('div');
-  item.innerHTML = `
-    <div class="layer-item" onclick="toggleLayer('${def.id}')">
-      <input type="checkbox" id="cb-${def.id}" ${def.visible ? 'checked' : ''}
-             onclick="event.stopPropagation(); toggleLayer('${def.id}')">
-      <span class="layer-dot" style="background:${def.color}"></span>
-      <span class="layer-label">${def.label}</span>
-    </div>
-    <div class="layer-opacity">
-      Opacité&nbsp;
-      <input type="range" min="0" max="1" step="0.05"
-             value="${def.opacity}" id="op-${def.id}"
-             oninput="setOpacity('${def.id}', this.value)">
-    </div>
-  `;
-  listEl.appendChild(item);
-});
+      // Créer le calque Leaflet (SVG ou image bitmap)
+      const layer = L.imageOverlay('images/' + file, bounds);
+      layer.setOpacity(opacity);
+      layers[id] = layer;
+      if (visible) layer.addTo(map);
 
-// Ajouter les marqueurs prédéfinis
-lieux.forEach(l => ajouterMarqueur(l.y, l.x, l.nom, l.desc));
+      // Construire l'entrée dans le panneau
+      const item = document.createElement('div');
+      item.innerHTML = `
+        <div class="layer-item" onclick="toggleLayer('${id}')">
+          <input type="checkbox" id="cb-${id}" ${visible ? 'checked' : ''}
+                 onclick="event.stopPropagation(); toggleLayer('${id}')">
+          <span class="layer-dot" style="background:${color}"></span>
+          <span class="layer-label">${label}</span>
+          <span class="layer-file" title="${file}">·</span>
+        </div>
+        <div class="layer-opacity">
+          Opacité&nbsp;
+          <input type="range" min="0" max="1" step="0.05"
+                 value="${opacity}" id="op-${id}"
+                 oninput="setOpacity('${id}', this.value)">
+        </div>
+      `;
+      listEl.appendChild(item);
+    });
+  })
+  .catch(err => {
+    listEl.innerHTML = `<p style="padding:10px;font-size:0.8rem;color:#a33;">
+      ⚠ ${err.message}<br>Vérifie que <code>index.json</code> est au même niveau que <code>index.html</code>.
+    </p>`;
+    console.error('Erreur chargement index.json :', err);
+  });
 
 // ═══════════════════════════════════════════════════════
 //  FONCTIONS
